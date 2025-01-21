@@ -9,6 +9,7 @@ import { useTeams } from '../../../mocks/team';
 import { useUser } from '../../../mocks/user';
 import { execSync } from 'child_process';
 import { vi } from 'vitest';
+import { REGEX_NON_VERCEL_PLATFORM_FILES } from '@vercel/fs-detectors';
 
 vi.setConfig({ testTimeout: 6 * 60 * 1000 });
 
@@ -18,6 +19,23 @@ const fixture = (name: string) =>
 describe('build', () => {
   beforeEach(() => {
     delete process.env.__VERCEL_BUILD_RUNNING;
+  });
+
+  describe('--help', () => {
+    it('tracks telemetry', async () => {
+      const command = 'build';
+
+      client.setArgv(command, '--help');
+      const exitCodePromise = build(client);
+      await expect(exitCodePromise).resolves.toEqual(2);
+
+      expect(client.telemetryEventStore).toHaveTelemetryEvents([
+        {
+          key: 'flag:help',
+          value: command,
+        },
+      ]);
+    });
   });
 
   it('should build with `@vercel/static`', async () => {
@@ -251,7 +269,7 @@ describe('build', () => {
           require: '@vercel/static',
           apiVersion: 2,
           use: '@vercel/static',
-          src: '!{api/**,package.json,middleware.[jt]s}',
+          src: REGEX_NON_VERCEL_PLATFORM_FILES,
           config: {
             zeroConfig: true,
           },
@@ -311,7 +329,7 @@ describe('build', () => {
           require: '@vercel/static',
           apiVersion: 2,
           use: '@vercel/static',
-          src: '!{api/**,package.json,middleware.[jt]s}',
+          src: REGEX_NON_VERCEL_PLATFORM_FILES,
           config: {
             zeroConfig: true,
           },
@@ -339,6 +357,9 @@ describe('build', () => {
       deploymentTarget: 'v8-worker',
       entrypoint: 'api/edge.js',
     });
+    expect(client.telemetryEventStore).toHaveTelemetryEvents([
+      { key: 'flag:prod', value: 'TRUE' },
+    ]);
   });
 
   it('should pull "preview" env vars by default', async () => {
@@ -370,6 +391,9 @@ describe('build', () => {
       await fs.remove(envFilePath);
       await fs.writeJSON(projectJsonPath, originalProjectJson, { spaces: 2 });
     }
+    expect(client.telemetryEventStore).toHaveTelemetryEvents([
+      { key: 'flag:yes', value: 'TRUE' },
+    ]);
   });
 
   it('should pull "production" env vars with `--prod`', async () => {
@@ -405,6 +429,49 @@ describe('build', () => {
       await fs.remove(envFilePath);
       await fs.writeJSON(projectJsonPath, originalProjectJson, { spaces: 2 });
     }
+    expect(client.telemetryEventStore).toHaveTelemetryEvents([
+      { key: 'flag:prod', value: 'TRUE' },
+      { key: 'flag:yes', value: 'TRUE' },
+    ]);
+  });
+
+  it('should pull "production" env vars with `--target production`', async () => {
+    const cwd = fixture('static-pull');
+    useUser();
+    useTeams('team_dummy');
+    useProject({
+      ...defaultProject,
+      id: 'vercel-pull-next',
+      name: 'vercel-pull-next',
+    });
+    const envFilePath = join(cwd, '.vercel', '.env.production.local');
+    const projectJsonPath = join(cwd, '.vercel', 'project.json');
+    const originalProjectJson = await fs.readJSON(
+      join(cwd, '.vercel/project.json')
+    );
+    try {
+      client.cwd = cwd;
+      client.setArgv('build', '--yes', '--target', 'production');
+      const exitCode = await build(client);
+      expect(exitCode).toEqual(0);
+
+      const prodEnv = await fs.readFile(envFilePath, 'utf8');
+      const envFileHasProductionEnv1 = prodEnv.includes(
+        'REDIS_CONNECTION_STRING'
+      );
+      expect(envFileHasProductionEnv1).toBeTruthy();
+      const envFileHasProductionEnv2 = prodEnv.includes(
+        'SQL_CONNECTION_STRING'
+      );
+      expect(envFileHasProductionEnv2).toBeTruthy();
+    } finally {
+      await fs.remove(envFilePath);
+      await fs.writeJSON(projectJsonPath, originalProjectJson, { spaces: 2 });
+    }
+    expect(client.telemetryEventStore).toHaveTelemetryEvents([
+      { key: 'option:target', value: 'production' },
+      { key: 'flag:yes', value: 'TRUE' },
+    ]);
   });
 
   it('should build root-level `middleware.js` and exclude from static files', async () => {
@@ -433,7 +500,7 @@ describe('build', () => {
           require: '@vercel/static',
           apiVersion: 2,
           use: '@vercel/static',
-          src: '!{api/**,package.json,middleware.[jt]s}',
+          src: REGEX_NON_VERCEL_PLATFORM_FILES,
           config: {
             zeroConfig: true,
           },
@@ -493,7 +560,7 @@ describe('build', () => {
           require: '@vercel/static',
           apiVersion: 2,
           use: '@vercel/static',
-          src: '!{api/**,package.json,middleware.[jt]s}',
+          src: REGEX_NON_VERCEL_PLATFORM_FILES,
           config: {
             zeroConfig: true,
           },
@@ -553,7 +620,7 @@ describe('build', () => {
           require: '@vercel/static',
           apiVersion: 2,
           use: '@vercel/static',
-          src: '!{api/**,package.json,middleware.[jt]s}',
+          src: REGEX_NON_VERCEL_PLATFORM_FILES,
           config: {
             zeroConfig: true,
           },
@@ -912,8 +979,10 @@ describe('build', () => {
     expect(configJson).toMatchObject({
       images: {
         sizes: [256, 384, 600, 1000],
+        qualities: [25, 50, 75],
         domains: [],
         minimumCacheTTL: 60,
+        localPatterns: [{ search: '' }],
         formats: ['image/avif', 'image/webp'],
         contentDispositionType: 'attachment',
       },
@@ -1166,7 +1235,8 @@ describe('build', () => {
     client.setArgv('build');
     const exitCodePromise = build(client);
     await expect(client.stderr).toOutput('Error: Detected unsupported');
-    await expect(exitCodePromise).resolves.toEqual(1);
+    const exitCode = await exitCodePromise;
+    expect(exitCode, 'exit code for "build"').toEqual(1);
   });
 
   it('should ignore `.env` for static site', async () => {
@@ -1271,6 +1341,47 @@ describe('build', () => {
         },
       },
     });
+  });
+
+  it('should not apply framework `defaultRoutes` when build command outputs Build Output API', async () => {
+    const cwd = fixture('build-output-api-with-api-dir');
+    const output = join(cwd, '.vercel/output');
+    client.cwd = cwd;
+    const exitCode = await build(client);
+    expect(exitCode).toEqual(0);
+
+    const config = await fs.readJSON(join(output, 'config.json'));
+    expect(config).toMatchInlineSnapshot(`
+      {
+        "crons": [],
+        "routes": [
+          {
+            "handle": "filesystem",
+          },
+          {
+            "src": "^/api(/.*)?$",
+            "status": 404,
+          },
+          {
+            "handle": "error",
+          },
+          {
+            "dest": "/404.html",
+            "src": "^(?!/api).*$",
+            "status": 404,
+          },
+          {
+            "handle": "miss",
+          },
+          {
+            "check": true,
+            "dest": "/api/$1",
+            "src": "^/api/(.+)(?:\\.(?:js))$",
+          },
+        ],
+        "version": 3,
+      }
+    `);
   });
 
   it('should detect framework version in monorepo app', async () => {

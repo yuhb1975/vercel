@@ -8,8 +8,8 @@
   },
   "dependencies": {
     "next": "canary",
-    "react": "19.0.0-rc.0",
-    "react-dom": "19.0.0-rc.0",
+    "react": "latest",
+    "react-dom": "latest",
     "typescript": "4.9.5"
   },
   "devDependencies": {

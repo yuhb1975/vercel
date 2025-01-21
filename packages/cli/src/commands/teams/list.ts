@@ -6,31 +6,42 @@ import getTeams from '../../util/teams/get-teams';
 import { packageName } from '../../util/pkg-name';
 import getCommandFlags from '../../util/get-command-flags';
 import cmd from '../../util/output/cmd';
-import Client from '../../util/client';
-import getArgs from '../../util/get-args';
+import type Client from '../../util/client';
+import { parseArguments } from '../../util/get-args';
+import { printError } from '../../util/error';
+import { getFlagsSpecification } from '../../util/get-flags-specification';
+import { listSubcommand } from './command';
+import output from '../../output-manager';
+import { TeamsListTelemetryClient } from '../../util/telemetry/commands/teams/list';
 
-export default async function list(client: Client): Promise<number> {
-  const { config, output } = client;
-
-  const argv = getArgs(client.argv.slice(2), {
-    '--since': String,
-    '--until': String,
-    '--count': Number,
-    '--next': Number,
-    '-C': '--count',
-    '-N': '--next',
+export default async function list(
+  client: Client,
+  argv: string[]
+): Promise<number> {
+  const { config, telemetryEventStore } = client;
+  const telemetry = new TeamsListTelemetryClient({
+    opts: {
+      store: telemetryEventStore,
+    },
   });
 
-  const next = argv['--next'];
-  const count = argv['--count'];
-
-  if (typeof next !== 'undefined' && !Number.isInteger(next)) {
-    output.error('Please provide a number for flag `--next`');
+  let parsedArgs;
+  const flagsSpecification = getFlagsSpecification(listSubcommand.options);
+  try {
+    parsedArgs = parseArguments(argv, flagsSpecification);
+  } catch (error) {
+    printError(error);
     return 1;
   }
 
-  if (typeof count !== 'undefined' && !Number.isInteger(next)) {
-    output.error('Please provide a number for flag `--count`');
+  const next = parsedArgs.flags['--next'];
+  telemetry.trackCliOptionNext(next);
+  telemetry.trackCliOptionCount(parsedArgs.flags['--count']);
+  telemetry.trackCliOptionUntil(parsedArgs.flags['--until']);
+  telemetry.trackCliOptionSince(parsedArgs.flags['--since']);
+
+  if (typeof next !== 'undefined' && !Number.isInteger(next)) {
+    output.error('Please provide a number for flag `--next`');
     return 1;
   }
 
@@ -95,7 +106,7 @@ export default async function list(client: Client): Promise<number> {
   client.stderr.write('\n');
 
   if (pagination?.count === 20) {
-    const flags = getCommandFlags(argv, ['_', '--next', '-N', '-d']);
+    const flags = getCommandFlags(parsedArgs.flags, ['--next', '-N', '-d']);
     const nextCmd = `${packageName} teams ls${flags} --next ${pagination.next}`;
     client.stdout.write('\n'); // empty line
     output.log(`To display the next page run ${cmd(nextCmd)}`);

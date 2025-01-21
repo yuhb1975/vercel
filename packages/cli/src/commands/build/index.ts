@@ -1,29 +1,33 @@
-import fs from 'fs-extra';
 import chalk from 'chalk';
 import dotenv from 'dotenv';
-import semver from 'semver';
+import fs from 'fs-extra';
 import minimatch from 'minimatch';
 import { join, normalize, relative, resolve, sep } from 'path';
-import { frameworkList } from '@vercel/frameworks';
+import semver from 'semver';
+
 import {
+  download,
+  FileFsRef,
   getDiscontinuedNodeVersions,
   getInstalledPackageVersion,
   normalizePath,
-  FileFsRef,
   NowBuildError,
   validateNpmrc,
-  type Files,
-  type PackageJson,
-  type BuildOptions,
-  type Config,
-  type Meta,
   type Builder,
+  type BuildOptions,
   type BuildResultV2,
   type BuildResultV2Typical,
   type BuildResultV3,
+  type Config,
   type Cron,
+  type Files,
   type FlagDefinitions,
+  type Meta,
+  type PackageJson,
 } from '@vercel/build-utils';
+import type { VercelConfig } from '@vercel/client';
+import { fileNameSymbol } from '@vercel/client';
+import { frameworkList, type Framework } from '@vercel/frameworks';
 import {
   detectBuilders,
   detectFrameworkRecord,
@@ -37,42 +41,42 @@ import {
   type MergeRoutesProps,
   type Route,
 } from '@vercel/routing-utils';
-import { fileNameSymbol } from '@vercel/client';
-import type { VercelConfig } from '@vercel/client';
 
-import pull from '../pull';
-import { staticFiles as getFiles } from '../../util/get-files';
-import type Client from '../../util/client';
-import { parseArguments } from '../../util/get-args';
-import cmd from '../../util/output/cmd';
-import * as cli from '../../util/pkg-name';
-import cliPkg from '../../util/pkg';
-import readJSONFile from '../../util/read-json-file';
-import { CantParseJSONFile } from '../../util/errors-ts';
-import {
-  pickOverrides,
-  readProjectSettings,
-  type ProjectLinkAndSettings,
-} from '../../util/projects/project-settings';
-import { getProjectLink, VERCEL_DIR } from '../../util/projects/link';
-import confirm from '../../util/input/confirm';
-import { emoji, prependEmoji } from '../../util/emoji';
-import stamp from '../../util/output/stamp';
+import output from '../../output-manager';
+import { cleanupCorepack, initCorepack } from '../../util/build/corepack';
+import { importBuilders } from '../../util/build/import-builders';
+import { setMonorepoDefaultSettings } from '../../util/build/monorepo';
+import { scrubArgv } from '../../util/build/scrub-argv';
+import { sortBuilders } from '../../util/build/sort-builders';
 import {
   OUTPUT_DIR,
   writeBuildResult,
   type PathOverride,
 } from '../../util/build/write-build-result';
-import { importBuilders } from '../../util/build/import-builders';
-import { initCorepack, cleanupCorepack } from '../../util/build/corepack';
-import { sortBuilders } from '../../util/build/sort-builders';
-import { handleError, toEnumerableError } from '../../util/error';
-import { validateConfig } from '../../util/validate-config';
-import { setMonorepoDefaultSettings } from '../../util/build/monorepo';
-import { help } from '../help';
-import { buildCommand } from './command';
-import { scrubArgv } from '../../util/build/scrub-argv';
+import type Client from '../../util/client';
+import { emoji, prependEmoji } from '../../util/emoji';
+import { printError, toEnumerableError } from '../../util/error';
+import { CantParseJSONFile } from '../../util/errors-ts';
+import { parseArguments } from '../../util/get-args';
+import { staticFiles as getFiles } from '../../util/get-files';
 import { getFlagsSpecification } from '../../util/get-flags-specification';
+import cmd from '../../util/output/cmd';
+import stamp from '../../util/output/stamp';
+import parseTarget from '../../util/parse-target';
+import cliPkg from '../../util/pkg';
+import * as cli from '../../util/pkg-name';
+import { getProjectLink, VERCEL_DIR } from '../../util/projects/link';
+import {
+  pickOverrides,
+  readProjectSettings,
+  type ProjectLinkAndSettings,
+} from '../../util/projects/project-settings';
+import readJSONFile from '../../util/read-json-file';
+import { BuildTelemetryClient } from '../../util/telemetry/commands/build';
+import { validateConfig } from '../../util/validate-config';
+import { help } from '../help';
+import { pullCommandLogic } from '../pull';
+import { buildCommand } from './command';
 
 type BuildResult = BuildResultV2 | BuildResultV3;
 
@@ -114,8 +118,12 @@ export interface BuildsManifest {
 }
 
 export default async function main(client: Client): Promise<number> {
+  const telemetryClient = new BuildTelemetryClient({
+    opts: {
+      store: client.telemetryEventStore,
+    },
+  });
   let { cwd } = client;
-  const { output } = client;
 
   // Ensure that `vc build` is not being invoked recursively
   if (process.env.__VERCEL_BUILD_RUNNING) {
@@ -141,18 +149,28 @@ export default async function main(client: Client): Promise<number> {
   // Parse CLI args
   try {
     parsedArgs = parseArguments(client.argv.slice(2), flagsSpecification);
+    telemetryClient.trackCliOptionOutput(parsedArgs.flags['--output']);
+    telemetryClient.trackCliOptionTarget(parsedArgs.flags['--target']);
+    telemetryClient.trackCliFlagProd(parsedArgs.flags['--prod']);
+    telemetryClient.trackCliFlagYes(parsedArgs.flags['--yes']);
   } catch (error) {
-    handleError(error);
+    printError(error);
     return 1;
   }
 
   if (parsedArgs.flags['--help']) {
+    telemetryClient.trackCliFlagHelp('build');
     output.print(help(buildCommand, { columns: client.stderr.columns }));
     return 2;
   }
 
   // Build `target` influences which environment variables will be used
-  const target = parsedArgs.flags['--prod'] ? 'production' : 'preview';
+  const target =
+    parseTarget({
+      flagName: 'target',
+      flags: parsedArgs.flags,
+    }) || 'preview';
+
   const yes = Boolean(parsedArgs.flags['--yes']);
 
   try {
@@ -179,7 +197,7 @@ export default async function main(client: Client): Promise<number> {
     let confirmed = yes;
     if (!confirmed) {
       if (!isTTY) {
-        client.output.print(
+        output.print(
           `No Project Settings found locally. Run ${cli.getCommandName(
             'pull --yes'
           )} to retrieve them.`
@@ -187,8 +205,7 @@ export default async function main(client: Client): Promise<number> {
         return 1;
       }
 
-      confirmed = await confirm(
-        client,
+      confirmed = await client.input.confirm(
         `No Project Settings found locally. Run ${cli.getCommandName(
           'pull'
         )} for retrieving them?`,
@@ -196,7 +213,7 @@ export default async function main(client: Client): Promise<number> {
       );
     }
     if (!confirmed) {
-      client.output.print(`Canceled. No Project Settings retrieved.\n`);
+      output.print(`Canceled. No Project Settings retrieved.\n`);
       return 0;
     }
     const { argv: originalArgv } = client;
@@ -207,7 +224,13 @@ export default async function main(client: Client): Promise<number> {
       `--environment`,
       target,
     ];
-    const result = await pull(client);
+    const result = await pullCommandLogic(
+      client,
+      client.cwd,
+      Boolean(parsedArgs.flags['--yes']),
+      target,
+      parsedArgs.flags
+    );
     if (result !== 0) {
       return result;
     }
@@ -245,7 +268,7 @@ export default async function main(client: Client): Promise<number> {
     // TODO (maybe?): load env vars from the API, fall back to the local file if that fails
     const dotenvResult = dotenv.config({
       path: envPath,
-      debug: client.output.isDebugEnabled(),
+      debug: output.isDebugEnabled(),
     });
     if (dotenvResult.error) {
       output.debug(
@@ -306,7 +329,7 @@ async function doBuild(
   cwd: string,
   outputDir: string
 ): Promise<void> {
-  const { localConfigPath, output } = client;
+  const { localConfigPath } = client;
 
   const workPath = join(cwd, project.settings.rootDirectory || '.');
 
@@ -346,11 +369,11 @@ async function doBuild(
     projectSettings.rootDirectory !== null &&
     projectSettings.rootDirectory !== '.'
   ) {
-    await setMonorepoDefaultSettings(cwd, workPath, projectSettings, output);
+    await setMonorepoDefaultSettings(cwd, workPath, projectSettings);
   }
 
   // Get a list of source files
-  const files = (await getFiles(workPath, client)).map(f =>
+  const files = (await getFiles(workPath, {})).map(f =>
     normalizePath(relative(workPath, f))
   );
 
@@ -421,7 +444,7 @@ async function doBuild(
 
   const builderSpecs = new Set(builds.map(b => b.use));
 
-  const buildersWithPkgs = await importBuilders(builderSpecs, cwd, output);
+  const buildersWithPkgs = await importBuilders(builderSpecs, cwd);
 
   // Populate Files -> FileFsRef mapping
   const filesMap: Files = {};
@@ -475,7 +498,7 @@ async function doBuild(
   const buildResults: Map<Builder, BuildResult | BuildOutputConfig> = new Map();
   const overrides: PathOverride[] = [];
   const repoRootPath = cwd;
-  const corepackShimDir = await initCorepack({ repoRootPath }, output);
+  const corepackShimDir = await initCorepack({ repoRootPath });
   const diagnostics: Files = {};
 
   for (const build of sortedBuilders) {
@@ -505,6 +528,7 @@ async function doBuild(
         }
       }
 
+      const isFrontendBuilder = build.config && 'framework' in build.config;
       const buildConfig: Config = isZeroConfig
         ? {
             outputDirectory: projectSettings.outputDirectory ?? undefined,
@@ -531,6 +555,23 @@ async function doBuild(
       let buildResult: BuildResultV2 | BuildResultV3 | undefined;
       try {
         buildResult = await builder.build(buildOptions);
+
+        // If the build result has no routes and the framework has default routes,
+        // then add the default routes to the build result
+        if (
+          buildConfig.zeroConfig &&
+          isFrontendBuilder &&
+          'output' in buildResult &&
+          !buildResult.routes
+        ) {
+          const framework = frameworkList.find(
+            f => f.slug === buildConfig.framework
+          );
+          if (framework) {
+            const defaultRoutes = await getFrameworkRoutes(framework, workPath);
+            buildResult.routes = defaultRoutes;
+          }
+        }
       } finally {
         // Make sure we don't fail the build
         try {
@@ -587,6 +628,13 @@ async function doBuild(
         buildJsonBuild.error = toEnumerableError(err);
       }
       throw err;
+    } finally {
+      ops.push(
+        download(diagnostics, join(outputDir, 'diagnostics')).then(
+          () => undefined,
+          err => err
+        )
+      );
     }
   }
 
@@ -614,9 +662,8 @@ async function doBuild(
     };
     needBuildsJsonOverride = true;
   }
-  const webAnalyticsVersion = await getInstalledPackageVersion(
-    '@vercel/analytics'
-  );
+  const webAnalyticsVersion =
+    await getInstalledPackageVersion('@vercel/analytics');
   if (webAnalyticsVersion) {
     buildsJson.features = {
       ...(buildsJson.features ?? {}),
@@ -692,7 +739,7 @@ async function doBuild(
   };
   await fs.writeJSON(join(outputDir, 'config.json'), config, { spaces: 2 });
 
-  await writeFlagsJSON(client, buildResults.values(), outputDir);
+  await writeFlagsJSON(buildResults.values(), outputDir);
 
   const relOutputDir = relative(cwd, outputDir);
   output.print(
@@ -831,7 +878,6 @@ function mergeWildcard(
  * file. It'll skip flags that already exist.
  */
 async function writeFlagsJSON(
-  { output }: Client,
   buildResults: Iterable<BuildResult | BuildOutputConfig>,
   outputDir: string
 ): Promise<void> {
@@ -876,4 +922,17 @@ async function writeFlagsJSON(
 
 async function writeBuildJson(buildsJson: BuildsManifest, outputDir: string) {
   await fs.writeJSON(join(outputDir, 'builds.json'), buildsJson, { spaces: 2 });
+}
+
+async function getFrameworkRoutes(
+  framework: Framework,
+  dirPrefix: string
+): Promise<Route[]> {
+  let routes: Route[] = [];
+  if (typeof framework.defaultRoutes === 'function') {
+    routes = await framework.defaultRoutes(dirPrefix);
+  } else if (Array.isArray(framework.defaultRoutes)) {
+    routes = framework.defaultRoutes;
+  }
+  return routes;
 }

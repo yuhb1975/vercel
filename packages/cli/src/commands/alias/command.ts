@@ -1,79 +1,60 @@
-import { Command } from '../help';
 import { packageName } from '../../util/pkg-name';
+import { limitOption, nextOption, yesOption } from '../../util/arg-common';
 
-export const aliasCommand: Command = {
-  name: 'alias',
-  description: 'Interact with deployment aliases.',
+export const setSubcommand = {
+  name: 'set',
+  aliases: [],
+  description: 'Create a new alias',
+  default: true,
   arguments: [
     {
-      name: 'command',
-      required: false,
+      name: 'deployment',
+      required: true,
+    },
+    {
+      name: 'alias',
+      required: true,
     },
   ],
-  subcommands: [
+  options: [],
+  examples: [],
+} as const;
+
+export const listSubcommand = {
+  name: 'list',
+  aliases: ['ls'],
+  description: 'Show all aliases',
+  arguments: [],
+  options: [limitOption, nextOption],
+  examples: [],
+} as const;
+
+export const removeSubcommand = {
+  name: 'remove',
+  aliases: ['rm'],
+  description: 'Remove an alias using its hostname',
+  arguments: [
     {
-      name: 'ls',
-      description: 'Show all aliases.',
-      arguments: [],
-      options: [],
-      examples: [],
-    },
-    {
-      name: 'set',
-      description: 'Create a new alias',
-      arguments: [
-        {
-          name: 'deployment',
-          required: true,
-        },
-        {
-          name: 'alias',
-          required: true,
-        },
-      ],
-      options: [],
-      examples: [],
-    },
-    {
-      name: 'rm',
-      description: 'Remove an alias using its hostname.',
-      arguments: [
-        {
-          name: 'alias',
-          required: true,
-        },
-      ],
-      options: [],
-      examples: [],
+      name: 'alias',
+      required: true,
     },
   ],
   options: [
     {
-      name: 'next',
-      description: 'Show next page of results',
-      argument: 'MS',
-      shorthand: 'N',
-      type: String,
-      deprecated: false,
-    },
-    {
-      name: 'yes',
+      ...yesOption,
       description: 'Skip the confirmation prompt when removing an alias',
-      shorthand: 'y',
-      type: Boolean,
-      deprecated: false,
     },
-    {
-      name: 'limit',
-      shorthand: null,
-      description:
-        'Number of results to return per page (default: 20, max: 100)',
-      argument: 'NUMBER',
-      type: String,
-      deprecated: false,
-    },
-    { name: 'json', shorthand: null, type: Boolean, deprecated: false },
   ],
+  examples: [],
+} as const;
+
+export const aliasCommand = {
+  name: 'alias',
+  aliases: ['aliases', 'ln'],
+  description: 'Interact with deployment aliases',
+  arguments: [],
+  subcommands: [listSubcommand, removeSubcommand, setSubcommand],
+  options: [],
   examples: [
     {
       name: 'Add a new alias to `my-api.vercel.app`',
@@ -88,4 +69,4 @@ export const aliasCommand: Command = {
       value: `${packageName} alias api-ownv3nc9f8.vercel.app my-api.com`,
     },
   ],
-};
+} as const;

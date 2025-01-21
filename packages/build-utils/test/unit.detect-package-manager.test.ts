@@ -1,3 +1,4 @@
+import { describe, test, expect } from 'vitest';
 import { detectPackageManager } from '../src/fs/run-user-scripts';
 
 describe('Test `detectPackageManager()`', () => {
@@ -31,7 +32,8 @@ describe('Test `detectPackageManager()`', () => {
         args: ['pnpm', 5.3],
         want: {
           detectedLockfile: 'pnpm-lock.yaml',
-          detectedPackageManager: 'pnpm 6',
+          detectedPackageManager: 'pnpm@6.x',
+          pnpmVersionRange: '6.x',
           path: undefined,
         },
       },
@@ -41,6 +43,7 @@ describe('Test `detectPackageManager()`', () => {
         want: {
           detectedLockfile: 'pnpm-lock.yaml',
           detectedPackageManager: 'pnpm@7.x',
+          pnpmVersionRange: '7.x',
           path: '/pnpm7/node_modules/.bin',
         },
       },
@@ -50,6 +53,7 @@ describe('Test `detectPackageManager()`', () => {
         want: {
           detectedLockfile: 'pnpm-lock.yaml',
           detectedPackageManager: 'pnpm@8.x',
+          pnpmVersionRange: '8.x',
           path: '/pnpm8/node_modules/.bin',
         },
       },
@@ -59,6 +63,7 @@ describe('Test `detectPackageManager()`', () => {
         want: {
           detectedLockfile: 'pnpm-lock.yaml',
           detectedPackageManager: 'pnpm@8.x',
+          pnpmVersionRange: '8.x',
           path: '/pnpm8/node_modules/.bin',
         },
       },
@@ -68,6 +73,7 @@ describe('Test `detectPackageManager()`', () => {
         want: {
           detectedLockfile: 'pnpm-lock.yaml',
           detectedPackageManager: 'pnpm@9.x',
+          pnpmVersionRange: '9.x',
           path: '/pnpm9/node_modules/.bin',
         },
       },
@@ -77,6 +83,7 @@ describe('Test `detectPackageManager()`', () => {
         want: {
           detectedLockfile: 'pnpm-lock.yaml',
           detectedPackageManager: 'pnpm@9.x',
+          pnpmVersionRange: '9.x',
           path: '/pnpm9/node_modules/.bin',
         },
       },
@@ -129,10 +136,19 @@ describe('Test `detectPackageManager()`', () => {
     }>([
       {
         name: 'returns bun@1 path',
-        args: ['bun', 1],
+        args: ['bun', 0],
         want: {
           path: '/bun1',
           detectedLockfile: 'bun.lockb',
+          detectedPackageManager: 'bun@1.x',
+        },
+      },
+      {
+        name: 'returns bun@1 path',
+        args: ['bun', 1],
+        want: {
+          path: '/bun1',
+          detectedLockfile: 'bun.lock',
           detectedPackageManager: 'bun@1.x',
         },
       },

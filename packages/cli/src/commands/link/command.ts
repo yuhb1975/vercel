@@ -1,8 +1,9 @@
-import { Command } from '../help';
 import { packageName } from '../../util/pkg-name';
+import { confirmOption, yesOption } from '../../util/arg-common';
 
-export const linkCommand: Command = {
+export const linkCommand = {
   name: 'link',
+  aliases: [],
   description: 'Link a local directory to a Vercel Project.',
   arguments: [],
   options: [
@@ -10,7 +11,7 @@ export const linkCommand: Command = {
       name: 'repo',
       description: 'Link multiple projects based on Git repository (alpha)',
       shorthand: 'r',
-      type: String,
+      type: Boolean,
       deprecated: false,
     },
     {
@@ -22,13 +23,11 @@ export const linkCommand: Command = {
       deprecated: false,
     },
     {
-      name: 'yes',
+      ...yesOption,
       description:
         'Skip questions when setting up new project using default scope and settings',
-      shorthand: 'y',
-      type: Boolean,
-      deprecated: false,
     },
+    confirmOption,
   ],
   examples: [
     {
@@ -48,4 +47,4 @@ export const linkCommand: Command = {
       value: `${packageName} link --repo`,
     },
   ],
-};
+} as const;

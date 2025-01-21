@@ -1,12 +1,12 @@
-import { Command } from '../help';
 import { packageName } from '../../util/pkg-name';
 
-export const redeployCommand: Command = {
+export const redeployCommand = {
   name: 'redeploy',
+  aliases: [],
   description: 'Rebuild and deploy a previous deployment.',
   arguments: [
     {
-      name: 'deploymentId|deploymentName',
+      name: 'url|deploymentId',
       required: false,
     },
   ],
@@ -16,6 +16,14 @@ export const redeployCommand: Command = {
       shorthand: null,
       description: "Don't wait for the redeploy to finish",
       type: Boolean,
+      deprecated: false,
+    },
+    {
+      name: 'target',
+      shorthand: null,
+      argument: 'TARGET',
+      description: 'Redeploy to a specific target environment',
+      type: String,
       deprecated: false,
     },
   ],
@@ -28,5 +36,9 @@ export const redeployCommand: Command = {
       name: 'Write Deployment URL to a file',
       value: `${packageName} redeploy my-deployment.vercel.app > deployment-url.txt`,
     },
+    {
+      name: 'Rebuild and deploy an existing deployment to a specific target environment',
+      value: `${packageName} redeploy my-deployment.vercel.app --target preview`,
+    },
   ],
-};
+} as const;
