@@ -1,7 +1,10 @@
-import { Command } from '../help';
+import { confirmOption, forceOption, yesOption } from '../../util/arg-common';
 
-export const deployCommand: Command = {
+export const deprecatedArchiveSplitTgz = 'split-tgz';
+
+export const deployCommand = {
   name: 'deploy',
+  aliases: [],
   description:
     'Deploy your project to Vercel. The `deploy` command is the default command for the Vercel CLI, and can be omitted (`vc deploy my-app` equals `vc my-app`).',
   arguments: [
@@ -12,10 +15,7 @@ export const deployCommand: Command = {
   ],
   options: [
     {
-      name: 'force',
-      shorthand: 'f',
-      type: Boolean,
-      deprecated: false,
+      ...forceOption,
       description: 'Force a new deployment even if nothing has changed',
     },
     {
@@ -36,7 +36,7 @@ export const deployCommand: Command = {
       name: 'env',
       shorthand: 'e',
       type: [String],
-      argument: 'key=value',
+      argument: 'KEY=VALUE',
       deprecated: false,
       description:
         'Specify environment variables during run-time (e.g. `-e KEY1=value1 -e KEY2=value2`)',
@@ -45,7 +45,7 @@ export const deployCommand: Command = {
       name: 'build-env',
       shorthand: 'b',
       type: [String],
-      argument: 'key=value',
+      argument: 'KEY=VALUE',
       deprecated: false,
       description:
         'Specify environment variables during build-time (e.g. `-b KEY1=value1 -b KEY2=value2`)',
@@ -54,7 +54,7 @@ export const deployCommand: Command = {
       name: 'meta',
       shorthand: 'm',
       type: [String],
-      argument: 'key=value',
+      argument: 'KEY=VALUE',
       deprecated: false,
       description:
         'Specify metadata for the deployment (e.g. `-m KEY1=value1 -m KEY2=value2`)',
@@ -63,6 +63,7 @@ export const deployCommand: Command = {
       name: 'regions',
       shorthand: null,
       type: String,
+      argument: 'REGION',
       deprecated: false,
       description: 'Set default regions to enable the deployment on',
     },
@@ -86,9 +87,10 @@ export const deployCommand: Command = {
       name: 'archive',
       shorthand: null,
       type: String,
+      argument: 'FORMAT',
       deprecated: false,
       description:
-        'Compress the deployment code into a file before uploading it',
+        'Compress the deployment code into an archive before uploading it',
     },
     {
       name: 'no-wait',
@@ -106,10 +108,7 @@ export const deployCommand: Command = {
         'Disable the automatic promotion (aliasing) of the relevant domains to a new production deployment. You can use `vc promote` to complete the domain-assignment process later',
     },
     {
-      name: 'yes',
-      shorthand: 'y',
-      type: Boolean,
-      deprecated: false,
+      ...yesOption,
       description: 'Use default options to skip all prompts',
     },
     {
@@ -124,29 +123,22 @@ export const deployCommand: Command = {
       shorthand: 'n',
       type: String,
       deprecated: true,
-      description: 'Provide a Vercel Project name',
     },
     {
       name: 'no-clipboard',
       shorthand: null,
       type: Boolean,
       deprecated: true,
-      description: 'Do not copy deployment URL to clipboard',
     },
     {
       name: 'target',
       shorthand: null,
       type: String,
+      argument: 'TARGET',
       deprecated: false,
       description: 'Specify the target deployment environment',
     },
-    {
-      name: 'confirm',
-      shorthand: 'c',
-      type: Boolean,
-      deprecated: true,
-      description: 'Use default options to skip all prompts',
-    },
+    confirmOption,
   ],
   examples: [
     {
@@ -170,4 +162,4 @@ export const deployCommand: Command = {
       value: 'vercel > deployment-url.txt',
     },
   ],
-};
+} as const;

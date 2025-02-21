@@ -1,4 +1,8 @@
-import { detectPackageManager } from '../src/fs/run-user-scripts';
+import { describe, test, expect } from 'vitest';
+import {
+  detectPackageManager,
+  PNPM_10_PREFERRED_AT,
+} from '../src/fs/run-user-scripts';
 
 describe('Test `detectPackageManager()`', () => {
   describe('with "npm"', () => {
@@ -31,7 +35,8 @@ describe('Test `detectPackageManager()`', () => {
         args: ['pnpm', 5.3],
         want: {
           detectedLockfile: 'pnpm-lock.yaml',
-          detectedPackageManager: 'pnpm 6',
+          detectedPackageManager: 'pnpm@6.x',
+          pnpmVersionRange: '6.x',
           path: undefined,
         },
       },
@@ -41,6 +46,7 @@ describe('Test `detectPackageManager()`', () => {
         want: {
           detectedLockfile: 'pnpm-lock.yaml',
           detectedPackageManager: 'pnpm@7.x',
+          pnpmVersionRange: '7.x',
           path: '/pnpm7/node_modules/.bin',
         },
       },
@@ -50,6 +56,7 @@ describe('Test `detectPackageManager()`', () => {
         want: {
           detectedLockfile: 'pnpm-lock.yaml',
           detectedPackageManager: 'pnpm@8.x',
+          pnpmVersionRange: '8.x',
           path: '/pnpm8/node_modules/.bin',
         },
       },
@@ -59,6 +66,7 @@ describe('Test `detectPackageManager()`', () => {
         want: {
           detectedLockfile: 'pnpm-lock.yaml',
           detectedPackageManager: 'pnpm@8.x',
+          pnpmVersionRange: '8.x',
           path: '/pnpm8/node_modules/.bin',
         },
       },
@@ -68,16 +76,38 @@ describe('Test `detectPackageManager()`', () => {
         want: {
           detectedLockfile: 'pnpm-lock.yaml',
           detectedPackageManager: 'pnpm@9.x',
+          pnpmVersionRange: '9.x',
           path: '/pnpm9/node_modules/.bin',
         },
       },
       {
-        name: 'for 9.0 lockfile returns pnpm 9 path',
+        name: 'for 9.0 lockfile returns pnpm 9 path with no project created time',
         args: ['pnpm', 9.0],
         want: {
           detectedLockfile: 'pnpm-lock.yaml',
           detectedPackageManager: 'pnpm@9.x',
+          pnpmVersionRange: '9.x',
           path: '/pnpm9/node_modules/.bin',
+        },
+      },
+      {
+        name: 'for 9.0 lockfile returns pnpm 9 path before prefer pnpm 10 datetime',
+        args: ['pnpm', 9.0, PNPM_10_PREFERRED_AT.getTime() - 1000],
+        want: {
+          detectedLockfile: 'pnpm-lock.yaml',
+          detectedPackageManager: 'pnpm@9.x',
+          pnpmVersionRange: '9.x',
+          path: '/pnpm9/node_modules/.bin',
+        },
+      },
+      {
+        name: 'for 9.0 lockfile returns pnpm 10 path after prefer pnpm 10 datetime',
+        args: ['pnpm', 9.0, PNPM_10_PREFERRED_AT.getTime() + 1000],
+        want: {
+          detectedLockfile: 'pnpm-lock.yaml',
+          detectedPackageManager: 'pnpm@10.x',
+          pnpmVersionRange: '10.x',
+          path: '/pnpm10/node_modules/.bin',
         },
       },
       {
@@ -91,10 +121,10 @@ describe('Test `detectPackageManager()`', () => {
         want: undefined,
       },
     ])('$name', ({ args, want }) => {
-      const [cliType, lockfileVersion] = args;
-      expect(detectPackageManager(cliType, lockfileVersion)).toStrictEqual(
-        want
-      );
+      const [cliType, lockfileVersion, preferredAt] = args;
+      expect(
+        detectPackageManager(cliType, lockfileVersion, preferredAt)
+      ).toStrictEqual(want);
     });
   });
 
@@ -129,10 +159,19 @@ describe('Test `detectPackageManager()`', () => {
     }>([
       {
         name: 'returns bun@1 path',
-        args: ['bun', 1],
+        args: ['bun', 0],
         want: {
           path: '/bun1',
           detectedLockfile: 'bun.lockb',
+          detectedPackageManager: 'bun@1.x',
+        },
+      },
+      {
+        name: 'returns bun@1 path',
+        args: ['bun', 1],
+        want: {
+          path: '/bun1',
+          detectedLockfile: 'bun.lock',
           detectedPackageManager: 'bun@1.x',
         },
       },

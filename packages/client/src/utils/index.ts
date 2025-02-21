@@ -1,6 +1,5 @@
 import { FilesMap } from './hashes';
-import { FetchOptions } from '@zeit/fetch';
-import { nodeFetch, zeitFetch } from './fetch';
+import nodeFetch, { RequestInit } from 'node-fetch';
 import { join, sep, relative, basename } from 'path';
 import { URL } from 'url';
 import ignore from 'ignore';
@@ -43,7 +42,7 @@ const EVENTS_ARRAY = [
   'checks-conclusion-canceled',
 ] as const;
 
-export type DeploymentEventType = typeof EVENTS_ARRAY[number];
+export type DeploymentEventType = (typeof EVENTS_ARRAY)[number];
 export const EVENTS = new Set(EVENTS_ARRAY);
 
 export function getApiDeploymentsUrl() {
@@ -187,6 +186,7 @@ export async function getVercelIgnore(
       '.env.local',
       '.env.*.local',
       '.venv',
+      '.yarn/cache',
       'npm-debug.log',
       'config.gypi',
       'node_modules',
@@ -231,7 +231,7 @@ function clearRelative(str: string) {
   return str.replace(/(\n|^)\.\//g, '$1');
 }
 
-interface FetchOpts extends FetchOptions {
+interface FetchOpts extends RequestInit {
   apiUrl?: string;
   method?: string;
   teamId?: string;
@@ -243,8 +243,7 @@ export const fetch = async (
   url: string,
   token: string,
   opts: FetchOpts = {},
-  debugEnabled?: boolean,
-  useNodeFetch?: boolean
+  debugEnabled?: boolean
 ): Promise<any> => {
   semaphore.acquire();
   const debug = createDebug(debugEnabled);
@@ -278,9 +277,7 @@ export const fetch = async (
 
   debug(`${opts.method || 'GET'} ${url}`);
   time = Date.now();
-  const res = useNodeFetch
-    ? await nodeFetch(url, opts)
-    : await zeitFetch(url, opts);
+  const res = await nodeFetch(url, opts);
   debug(`DONE in ${Date.now() - time}ms: ${opts.method || 'GET'} ${url}`);
   semaphore.release();
 

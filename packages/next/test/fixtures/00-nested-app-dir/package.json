@@ -3,9 +3,8 @@
     "build": "next build apps/app"
   },
   "dependencies": {
-    "next": "canary",
-    "react": "19.0.0-rc.0",
-    "react-dom": "19.0.0-rc.0"
-  },
-  "ignoreNextjsUpdates": true
+    "next": "15.2.0-canary.33",
+    "react": "latest",
+    "react-dom": "latest"
+  }
 }
