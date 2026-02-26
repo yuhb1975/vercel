@@ -96,8 +96,8 @@ export default async function publish(client: Client, argv: string[]) {
 
     return 0;
   } catch (e: unknown) {
-    const err = e as { message?: string };
-    output.error(err.message || 'Failed to publish routes');
+    const error = e as { message?: string };
+    output.error(error.message || 'Failed to publish routes');
     return 1;
   }
 }

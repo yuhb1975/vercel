@@ -129,8 +129,8 @@ export default async function restore(client: Client, argv: string[]) {
 
     return 0;
   } catch (e: unknown) {
-    const err = e as { message?: string };
-    output.error(err.message || 'Failed to restore version');
+    const error = e as { message?: string };
+    output.error(error.message || 'Failed to restore version');
     return 1;
   }
 }

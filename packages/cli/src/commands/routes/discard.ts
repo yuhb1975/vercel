@@ -87,8 +87,8 @@ export default async function discard(client: Client, argv: string[]) {
 
     return 0;
   } catch (e: unknown) {
-    const err = e as { message?: string };
-    output.error(err.message || 'Failed to discard staged changes');
+    const error = e as { message?: string };
+    output.error(error.message || 'Failed to discard staged changes');
     return 1;
   }
 }

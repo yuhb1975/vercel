@@ -60,6 +60,10 @@ export interface RouteVersion {
 export interface GetRoutesResponse {
   routes: RoutingRule[];
   version: RouteVersion | null;
+  limit?: {
+    maxRoutes: number;
+    currentRoutes: number;
+  };
 }
 
 /**
@@ -134,7 +138,9 @@ export interface Transform {
   type: TransformType;
   op: TransformOp;
   target: { key: string };
-  args?: string;
+  args?: string | string[];
+  /** Environment variables referenced in args. The proxy only expands listed vars. */
+  env?: string[];
 }
 
 /**
@@ -167,7 +173,8 @@ export interface AddRouteInput {
     transforms?: Transform[];
     has?: HasField[];
     missing?: HasField[];
-    continue?: boolean;
+    /** Environment variables referenced in dest/headers. Populated automatically. */
+    env?: string[];
   };
 }
 

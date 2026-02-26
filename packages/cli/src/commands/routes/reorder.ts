@@ -241,14 +241,8 @@ export default async function reorder(client: Client, argv: string[]) {
 
     return 0;
   } catch (e: unknown) {
-    const error = e as { message?: string; code?: string };
-    if (error.code === 'feature_not_enabled') {
-      output.error(
-        'Project-level routes are not enabled for this project. Please contact support.'
-      );
-    } else {
-      output.error(error.message || 'Failed to reorder route');
-    }
+    const error = e as { message?: string };
+    output.error(error.message || 'Failed to reorder route');
     return 1;
   }
 }

@@ -11,6 +11,7 @@ import {
 import addRoute from '../../util/routes/add-route';
 import getRouteVersions from '../../util/routes/get-route-versions';
 import { parseConditions } from '../../util/routes/parse-conditions';
+import { populateRouteEnv } from '../../util/routes/env';
 import stamp from '../../util/output/stamp';
 import { getCommandName } from '../../util/pkg-name';
 import { RoutesAddTelemetryClient } from '../../util/telemetry/commands/routes';
@@ -441,6 +442,9 @@ export default async function add(client: Client, argv: string[]) {
     },
   };
 
+  // Populate env fields for $VAR references
+  populateRouteEnv(routeInput.route);
+
   // --- Create the route ---
   const addStamp = stamp();
   output.spinner(`Adding route "${name}"`);
@@ -515,14 +519,8 @@ export default async function add(client: Client, argv: string[]) {
 
     return 0;
   } catch (e: unknown) {
-    const error = e as { message?: string; code?: string };
-    if (error.code === 'feature_not_enabled') {
-      output.error(
-        'Project-level routes are not enabled for this project. Please contact support.'
-      );
-    } else {
-      output.error(error.message || 'Failed to create route');
-    }
+    const error = e as { message?: string };
+    output.error(error.message || 'Failed to create route');
     return 1;
   }
 }
