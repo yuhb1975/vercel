@@ -1,5 +1,18 @@
 # vercel
 
+## 53.1.1
+
+### Patch Changes
+
+- 4a5be0b: Fixed `vc env update` failing when updating sensitive environment variables.
+- 2ffd7bc: Tighten the `SdkKey` type so plaintext `keyValue`, `tokenValue`, and `connectionString` can no longer appear on list responses. `flags sdk-keys ls --json` already omitted these via an explicit allowlist; the type split makes the guarantee static. Create-time output from `flags sdk-keys add` is unaffected.
+- bab5a60: Handle stale Claude Code Vercel plugin registry entries during plugin migration.
+- Updated dependencies [34e7b09]
+- Updated dependencies [8e29c9c]
+- Updated dependencies [fa5f57a]
+  - @vercel/next@4.17.1
+  - @vercel/python@6.38.0
+
 ## 53.1.0
 
 ### Minor Changes
