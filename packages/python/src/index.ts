@@ -1,5 +1,4 @@
 import assert from 'assert';
-import { execSync } from 'child_process';
 import fs from 'fs';
 import { join, dirname, basename, parse } from 'path';
 import {
@@ -53,6 +52,7 @@ import {
   getUvBinaryOrInstall,
   getUvCacheDir,
   findUvInPath,
+  checkUvBinaryVersion,
 } from './uv';
 import { resolvePythonVersion, pythonVersionString } from './version';
 import { generateProjectManifest } from './diagnostics';
@@ -514,10 +514,6 @@ export const build: BuildVX = async ({
   try {
     const uvPath = await getUvBinaryOrInstall(pythonVersion.pythonPath);
     uv = new UvRunner(uvPath, uvCacheDir);
-    const uvVersionOutput = execSync(`${uvPath} --version`, {
-      encoding: 'utf8',
-    }).trim();
-    console.log(`Using ${uvVersionOutput}`);
   } catch (err) {
     console.log('Failed to install or locate uv');
     throw new Error(
@@ -526,6 +522,9 @@ export const build: BuildVX = async ({
       }`
     );
   }
+
+  const uvVersion = checkUvBinaryVersion(uv.getPath());
+  console.log(`Using ${uvVersion}`);
 
   const venvPath = service?.name
     ? join(workPath, '.vercel', 'python', 'services', service.name, '.venv')
