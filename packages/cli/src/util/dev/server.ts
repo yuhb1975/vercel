@@ -3125,7 +3125,8 @@ function isServiceDestination(
     !isHandler(route) &&
     typeof route.destination === 'object' &&
     route.destination !== null &&
-    route.destination.type === 'service'
+    'service' in route.destination &&
+    typeof route.destination.service === 'string'
   );
 }
 
