@@ -441,33 +441,32 @@ function buildInteractiveDefinition(
     }> {
       try {
         await autoProvisionConnectorIfEnabled(options, connection);
-        // Eve's `webhook` parameter is semantically a browser-redirect
-        // target — the orchestrator mints it via `createWebhook({
-        // respondWith: buildAuthorizationCompletePage() })` so the
-        // user lands on a friendly "you can close this tab" page after
-        // consent. That maps to Vercel Connect's `callbackUrl:`
-        // semantics, which accepts both `https://` (prod) and
-        // `http://localhost` (vercel dev) — one field covers both.
+        // eve's `webhook` parameter is also the browser-redirect
+        // target when `callbackUrl` is absent — the orchestrator mints
+        // it via `createWebhook({ respondWith:
+        // buildAuthorizationCompletePage() })` so the user lands on a
+        // friendly "you can close this tab" page after consent. That
+        // maps to Vercel Connect's `callbackUrl:` semantics, which
+        // accepts both `https://` (prod) and `http://localhost`
+        // (vercel dev).
+        //
+        // When the eve webhook is HTTPS, also pass it as Vercel
+        // Connect's server-side completion webhook. That lets Connect
+        // resume the eve session even when the OAuth callback fails
+        // before the browser can be redirected back, such as a token
+        // exchange error after provider consent.
+        //
         // Vercel Connect authenticates the calling Vercel project via
         // OIDC, which is what lets per-workflow dynamic webhook URLs
         // work without an OAuth-style redirect-URI allowlist.
-        //
-        // We don't route `https://` URLs into Vercel Connect's
-        // `webhook:` (server-POST) field, even though it would
-        // survive the user closing the consent tab right after IdP
-        // callback. That mode shows the user Vercel Connect's
-        // generic "close this window" page instead of Eve's branded
-        // landing page, and the helper would need to grow
-        // protocol-aware logic that diverges from the simple "Eve
-        // mints one URL, Vercel Connect redirects there" mental
-        // model. Revisit if tab-close timeouts become a real problem
-        // in production.
+        const completionWebhook = connectCompletionWebhook(webhook);
         const response = await startAuthorization(
           options.connector,
           await buildTokenParams(options, principal, connection),
           {
             ...options.connectOptions,
             callbackUrl: callbackUrl ?? webhook,
+            ...(completionWebhook ? { webhook: completionWebhook } : null),
             deviceCode: true,
           }
         );
@@ -505,6 +504,17 @@ function buildInteractiveDefinition(
       }
     },
   };
+}
+
+function connectCompletionWebhook(webhook: string | undefined): string | null {
+  if (!webhook) {
+    return null;
+  }
+  try {
+    return new URL(webhook).protocol === 'https:' ? webhook : null;
+  } catch {
+    return null;
+  }
 }
 
 function buildNonInteractiveDefinition(

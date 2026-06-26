@@ -451,16 +451,7 @@ describe('connect() adapter subject mapping', () => {
   });
 
   it('threads the connection context into startAuthorization subjects', async () => {
-    fetchMock.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          request: 'req_1',
-          verifier: 'ver_1',
-          url: 'https://connect.vercel.com/authorize/req_1',
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      )
-    );
+    fetchMock.mockResolvedValueOnce(jsonAuthorizationResponse('req_1'));
 
     const createSubject = vi.fn(
       (
@@ -500,6 +491,54 @@ describe('connect() adapter subject mapping', () => {
       },
       returnUrl: 'https://example.com/callback',
     });
+  });
+
+  it('passes an HTTPS eve webhook as both browser callback and Connect completion webhook', async () => {
+    fetchMock.mockResolvedValueOnce(jsonAuthorizationResponse('req_webhook'));
+
+    const definition = connect({
+      connector: 'oauth/eve-webhook',
+      autoProvision: false,
+    }) as InteractiveAuthorizationDefinition;
+
+    await definition.startAuthorization({
+      principal: PRINCIPAL,
+      connection: CONNECTION,
+      webhook: 'https://eve.example.com/hooks/authorization-complete',
+    });
+
+    const [authorizeUrl, authorizeInit] = fetchMock.mock.calls[0];
+    expect(authorizeUrl).toBe(
+      'https://api.vercel.com/v1/connect/authorize/oauth%2Feve-webhook'
+    );
+    expect(JSON.parse(authorizeInit.body as string)).toMatchObject({
+      returnUrl: 'https://eve.example.com/hooks/authorization-complete',
+      webhook: 'https://eve.example.com/hooks/authorization-complete',
+      deviceCode: true,
+    });
+  });
+
+  it('uses a localhost eve webhook only as the browser callback for local development', async () => {
+    fetchMock.mockResolvedValueOnce(jsonAuthorizationResponse('req_localhost'));
+
+    const definition = connect({
+      connector: 'oauth/eve-webhook-localhost',
+      autoProvision: false,
+    }) as InteractiveAuthorizationDefinition;
+
+    await definition.startAuthorization({
+      principal: PRINCIPAL,
+      connection: CONNECTION,
+      webhook: 'http://localhost:3000/hooks/authorization-complete',
+    });
+
+    const [, authorizeInit] = fetchMock.mock.calls[0];
+    const body = JSON.parse(authorizeInit.body as string);
+    expect(body).toMatchObject({
+      returnUrl: 'http://localhost:3000/hooks/authorization-complete',
+      deviceCode: true,
+    });
+    expect(body).not.toHaveProperty('webhook');
   });
 
   it('prefers createSubject over principalToSubject when both are set', async () => {
@@ -590,6 +629,17 @@ describe('connect() adapter subject mapping', () => {
     });
   });
 });
+
+function jsonAuthorizationResponse(request: string): Response {
+  return new Response(
+    JSON.stringify({
+      request,
+      verifier: `verifier_${request}`,
+      url: `https://connect.vercel.com/authorize/${request}`,
+    }),
+    { status: 200, headers: { 'Content-Type': 'application/json' } }
+  );
+}
 
 function jsonTokenResponse(
   token: string,
